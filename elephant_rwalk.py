@@ -3,39 +3,34 @@ from scipy import sparse
 from scipy import optimize
 import matplotlib.pyplot as plt
 
-def ProbabilityCalculation(delta_probabilities,time,p):
+def TransitionMatrix(p,time,size):
 
-    old_plus = sum(delta_probabilities[:,0])
-    old_minus = sum(delta_probabilities[:,1])
-    
-    prob_plus = (p/time)*old_plus + ((1-p)/time)*old_minus 
-    prob_minus = (p/time)*old_minus + ((1-p)/time)*old_plus
-    
-    print(prob_plus)
-    print(prob_minus)
-    print('')
-
-    return [prob_plus,prob_minus]
-
-def TransitionMatrix(delta_probabilities,size,time):
-
-    prob_plus = delta_probabilities[0]
-    prob_minus = delta_probabilities[1]
-    
     transition_matrix = sparse.lil_matrix((size,size),dtype='float')
 
     for i in range(-time,time + 1, 2):
          
+        actual_pos = size//2 + i
         partial_transition = sparse.lil_matrix((size,size),dtype='float')
+
+        if time != 0:
+            alpha = (2*p - 1)/time
+            prob_plus = (1/2)*(1 + alpha*i)
+            prob_minus = (1/2)*(1 - alpha*i)
+        else:
+            prob_plus = p
+            prob_minus = 1 - p
+
+        if (1-prob_plus-prob_minus) > 10**(-10): print('Error!\n')
+
         if i < size//2 and i > -size//2:
-            partial_transition[size//2 + i + 1, size//2 + i] = prob_plus
-            partial_transition[size//2 + i - 1, size//2 + i] = prob_minus
+            partial_transition[actual_pos + 1, actual_pos] = prob_plus
+            partial_transition[actual_pos - 1, actual_pos] = prob_minus
         elif i == size//2:
-            partial_transition[-size//2 , size//2 + i] = prob_plus
-            partial_transition[size//2 + i - 1, size//2 + i] = prob_minus
+            partial_transition[-size//2 , actual_pos] = prob_plus
+            partial_transition[actual_pos - 1, actual_pos] = prob_minus
         elif i == -size//2:
-            partial_transition[size//2 + i + 1, size//2 + i] = prob_plus
-            partial_transition[size//2, size//2 + i] = prob_minus
+            partial_transition[actual_pos + 1, actual_pos] = prob_plus
+            partial_transition[size//2, actual_pos] = prob_minus
 
         transition_matrix = transition_matrix + partial_transition
 
@@ -50,29 +45,27 @@ def Simulation(q,p,size):
     time_vector = []
     probability_vector = sparse.lil_matrix((lattice_size,1),dtype='float')
     probability_vector[lattice_size//2,0] = 1
-    delta_probabilities = [[q,1-q]]
-    delta_probabilities = np.array(delta_probabilities)
-    
+    transition_matrix = TransitionMatrix(q,0,size)
+
     for t in range(0,size//2):
 
-#        print(' time = ',t,end='\r')
-        time_vector.append(t)
-        transition_matrix = TransitionMatrix(delta_probabilities[-1],size,t)
-        probability_vector = np.dot(transition_matrix,probability_vector)
-        delta_probabilities = np.concatenate((delta_probabilities,[ProbabilityCalculation(delta_probabilities,t+1,p)]),axis=0)
-        
-        variance = 0
+        print(' time = ',t,end='\r')
 
+        variance = 0
         for l in range(-size//2,size//2):
             variance = variance + l**(2)*probability_vector[size//2 + l,0]
 
         variance_list.append(variance)
 
+        time_vector.append(t)
+        probability_vector = np.dot(transition_matrix,probability_vector)
+        transition_matrix = TransitionMatrix(p,t+1,size)
+
     return (variance_list, probability_vector, time_vector)
 
 q = 0.5
 p = 1
-lattice_size = 201
+lattice_size = 801
 
 variance, probability_vector, time_vector = Simulation(q,p,lattice_size)
 probability_vector = probability_vector.todense()
