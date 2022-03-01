@@ -3,25 +3,35 @@ from scipy import sparse
 from scipy import optimize
 import matplotlib.pyplot as plt
 
+def general_variance(x,a,b,c,d):
+        return a*x**3+b*x**2+c*x+d
+
 def TransitionMatrix(p,time,size):
 
     transition_matrix = sparse.lil_matrix((size,size),dtype='float')
 
+    # Loop that runs only over the necessaries sites.
     for i in range(-time,time + 1, 2):
          
-        actual_pos = size//2 + i
+        actual_pos = size//2 + i # actual position index
+        # Transition matrix for the actual site.
         partial_transition = sparse.lil_matrix((size,size),dtype='float')
-
+        
         if time != 0:
             alpha = (2*p - 1)/time
+            # Here as the probabilities depends on the memory state
+            # it will depend on the position.
             prob_plus = (1/2)*(1 + alpha*i)
             prob_minus = (1/2)*(1 - alpha*i)
         else:
+            # In t = 0  the probabilities depends only on p.
             prob_plus = p
             prob_minus = 1 - p
 
+        # Check if the probabilities sum to one.
         if (1-prob_plus-prob_minus) > 10**(-10): print('Error!\n')
 
+        # Ciclic condition in the borders of the lattice.
         if i < size//2 and i > -size//2:
             partial_transition[actual_pos + 1, actual_pos] = prob_plus
             partial_transition[actual_pos - 1, actual_pos] = prob_minus
@@ -36,39 +46,46 @@ def TransitionMatrix(p,time,size):
 
     return transition_matrix
 
-def general_variance(x,a,b,c,d):
-        return a*x**3+b*x**2+c*x+d
-
 def Simulation(q,p,size):
 
     variance_list = []
     time_vector = []
+    # Column probability vector.
     probability_vector = sparse.lil_matrix((lattice_size,1),dtype='float')
+    # p(x=0) = 1. The 0 index is the -size//2 position in the lattice.
     probability_vector[lattice_size//2,0] = 1
     transition_matrix = TransitionMatrix(q,0,size)
 
     for t in range(0,size//2):
 
         print(' time = ',t,end='\r')
-
-        variance = 0
-        for l in range(-size//2,size//2):
-            variance = variance + l**(2)*probability_vector[size//2 + l,0]
-
-        variance_list.append(variance)
-
         time_vector.append(t)
+
+        mean_position_sq = 0
+        mean_position = 0
+        for l in range(-size//2,size//2):
+
+            pl = probability_vector[size//2 + l,0]
+            mean_position_sq = mean_position_sq + l**(2)*pl 
+            mean_position = mean_position + l*pl 
+
+        variance_list.append(mean_position_sq - (mean_position)**(2))
+
         probability_vector = np.dot(transition_matrix,probability_vector)
+        if (1-sum(probability_vector.todense())) > 10**(-10): print('Error!\n')
+
         transition_matrix = TransitionMatrix(p,t+1,size)
 
     return (variance_list, probability_vector, time_vector)
 
-q = 0.5
-p = 1
+q = 0.5 # initial +1 displacement probability.
+p = 0.5 # "Do the same" probability.
 lattice_size = 801
 
 variance, probability_vector, time_vector = Simulation(q,p,lattice_size)
 probability_vector = probability_vector.todense()
+
+#################### PLOT ################################################
 
 position_vector = []
 for i in range(-lattice_size//2,lattice_size//2):
